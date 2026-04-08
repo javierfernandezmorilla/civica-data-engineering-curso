@@ -268,4 +268,4 @@ Finalmente MAIN_SHIPPING_SERVICE corresponde a el servicio de paquetería más u
 
 Felicidades ya has terminado realmente, tu INSERT INTO en gold va fino y funciona de lujo y ya solo tienes que crear un procedure con la misma forma que el de silver que contenga el insert into para cada caso de uso. Puedes copiar y pegar el de SILVER y sustituir las queries que tira por el insert into de GOLD correspondiente. Con esto la transformación está completamente desarrollada y preparada para lanzarse cómodamente. Te has ganado una cerveza compañer@.
 
-PD: Espero que alguien llegue a este punto
+PD: Espero que alguien llegue a este punto, si lo haces te debo una cerveza
