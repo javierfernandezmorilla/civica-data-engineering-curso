@@ -1,4 +1,4 @@
- # Datos semiestructurados
+# Datos semiestructurados
 
 
   ## Paso 1: Primer Cloning
@@ -9,6 +9,225 @@ Pista : Siempre que tengáis un objeto ya creado y lo querais recrear sobreescri
 
   ## Paso 2: Ingesta
 
+Como ya entendemos los datos semi-estructurados, vamos a ver su uso en Snowflake con un ejercicio práctico. A por elloo!
+
+Supongamos que, cuando estabas ingestando datos, han llegado datos nuevos de otra fuente de datos en formato JSON, y se deben de ingestar estos datos también. El problema es que no vienen en un formato tabular como hasta ahora. Se nos presentan dos archivos JSON: 
+
+- insert_orders.json:
+
+```
+  {
+    "ORDER_ID": "f940e504-a80a-44bb-af9b-364387104824",
+    "USER_ID": "02414bff-285d-4008-9352-ad50839b729f",
+    "ADDRESS_ID": "1c6e9a5c-3fa8-4ac5-a4fe-5159a187c293",
+    "STATUS": "preparing",
+    "SHIPPING_SERVICE": "dhl",
+    "SHIPPING_COST": 12.59,
+    "ORDER_COST": 58.75,
+    "ORDER_TOTAL": 71.34,
+    "PROMO_ID": null,
+    "TRACKING_ID": "0291a09c-8a91-46ae-8d46-a3cbcf106bf6",
+    "CREATED_AT": "2026-03-24 10:47:00.000",
+    "ESTIMATED_DELIVERY_AT": "2026-03-27 12:00:00.000",
+    "DELIVERED_AT": null
+  },
+  {
+    "ORDER_ID": "7de9b510-d33e-4ca2-b21d-c8904d9a1e0a",
+    "USER_ID": "0babae9e-2656-4dcb-b454-47d88d47c920",
+    "ADDRESS_ID": "e6572a36-e4ae-4daa-8c05-692490c310a1",
+    "STATUS": "shipped",
+    "SHIPPING_SERVICE": "dhl",
+    "SHIPPING_COST": 11.86,
+    "ORDER_COST": 61.12,
+    "ORDER_TOTAL": 72.98,
+    "PROMO_ID": null,
+    "TRACKING_ID": "0e780cf1-1732-4f40-916a-c2a29e73fc26",
+    "CREATED_AT": "2026-03-21 16:38:00.000",
+    "ESTIMATED_DELIVERY_AT": "2026-03-24 12:00:00.000",
+    "DELIVERED_AT": "2026-03-25 14:00:00.000"
+  },
+  {
+    "ORDER_ID": "f5d46b90-17fe-4878-a7a7-afc4a253448e",
+    "USER_ID": "2d90a679-c85d-4299-86dd-2319424fcc15",
+    "ADDRESS_ID": "89ab3752-1119-4f9e-9766-0d6883501434",
+    "STATUS": "shipped",
+    "SHIPPING_SERVICE": "usps",
+    "SHIPPING_COST": 6.31,
+    "ORDER_COST": 256.24,
+    "ORDER_TOTAL": 262.55,
+    "PROMO_ID": "Mandatory",
+    "TRACKING_ID": "7c3e2ae7-da67-415c-bfd8-d18f300ea2a9",
+    "CREATED_AT": "2026-03-20 13:17:00.000",
+    "ESTIMATED_DELIVERY_AT": "2026-03-23 12:00:00.000",
+    "DELIVERED_AT": "2026-03-24 14:00:00.000"
+  },
+  {
+    "ORDER_ID": "80eb23b9-f64e-423f-8a15-4a2ed0441adf",
+    "USER_ID": "4115e7da-5892-4eef-9f39-705626158c7f",
+    "ADDRESS_ID": "71aa45c1-ce05-43b5-a52a-6145ab435c69",
+    "STATUS": "preparing",
+    "SHIPPING_SERVICE": "ups",
+    "SHIPPING_COST": 8.7,
+    "ORDER_COST": 175.64,
+    "ORDER_TOTAL": 184.34,
+    "PROMO_ID": "task-force",
+    "TRACKING_ID": "77472966-6aca-4d4e-a5e9-50c863149fbb",
+    "CREATED_AT": "2026-03-25 19:29:00.000",
+    "ESTIMATED_DELIVERY_AT": "2026-03-29 12:00:00.000",
+    "DELIVERED_AT": null
+  },
+  {
+    "ORDER_ID": "11c397d5-58fc-46ee-8474-95b1742ce296",
+    "USER_ID": "520baa4f-ee70-420b-96c9-37e3c4238f43",
+    "ADDRESS_ID": "4d9d28c3-6e38-48e7-9960-f244a3e72d9d",
+    "STATUS": "shipped",
+    "SHIPPING_SERVICE": "ups",
+    "SHIPPING_COST": 15.44,
+    "ORDER_COST": 266.48,
+    "ORDER_TOTAL": 281.92,
+    "PROMO_ID": "Optional",
+    "TRACKING_ID": "7addbad8-c3c9-4097-96b2-505dd3bc7389",
+    "CREATED_AT": "2026-03-25 08:42:00.000",
+    "ESTIMATED_DELIVERY_AT": "2026-03-28 12:00:00.000",
+    "DELIVERED_AT": "2026-03-29 14:00:00.000"
+  },
+  {
+    "ORDER_ID": "e1457b54-6b8b-4924-b996-e2e2c91b0ce1",
+    "USER_ID": "48ebf150-7cb7-4358-a5ef-1a2b0aa831b9",
+    "ADDRESS_ID": "db3e2e70-32f5-4f13-8302-63127ca0e3a8",
+    "STATUS": "preparing",
+    "SHIPPING_SERVICE": "dhl",
+    "SHIPPING_COST": 16.0,
+    "ORDER_COST": 183.04,
+    "ORDER_TOTAL": 199.04,
+    "PROMO_ID": null,
+    "TRACKING_ID": "f11e732c-c637-40f1-9c5c-0f214480cd3c",
+    "CREATED_AT": "2026-03-27 13:22:00.000",
+    "ESTIMATED_DELIVERY_AT": "2026-03-31 12:00:00.000",
+    "DELIVERED_AT": null
+  },
+  {
+    "ORDER_ID": "71bd20e8-adef-4f05-87c2-a3bf33615f15",
+    "USER_ID": "d1f08820-32e6-4a31-abba-5aa533bc15a9",
+    "ADDRESS_ID": "02331e89-1736-4f12-85b9-ddd62545214b",
+    "STATUS": "preparing",
+    "SHIPPING_SERVICE": "ups",
+    "SHIPPING_COST": 7.5,
+    "ORDER_COST": 125.0,
+    "ORDER_TOTAL": 132.5,
+    "PROMO_ID": null,
+    "TRACKING_ID": "fab7e760-3b55-4b8e-8d4e-bfddc5461fb3",
+    "CREATED_AT": "2026-03-27 10:00:00.000",
+    "ESTIMATED_DELIVERY_AT": "2026-03-30 12:00:00.000",
+    "DELIVERED_AT": null
+  },
+  {
+    "ORDER_ID": "547fc142-6480-4d53-b671-596f67347751",
+    "USER_ID": "d1f08820-32e6-4a31-abba-5aa533bc15a9",
+    "ADDRESS_ID": "02331e89-1736-4f12-85b9-ddd62545214b",
+    "STATUS": "shipped",
+    "SHIPPING_SERVICE": "fedex",
+    "SHIPPING_COST": 12.0,
+    "ORDER_COST": 210.75,
+    "ORDER_TOTAL": 222.75,
+    "PROMO_ID": "Mandatory",
+    "TRACKING_ID": "b805b81a-a25f-4887-becc-ce11b11f50ca",
+    "CREATED_AT": "2026-03-25 08:30:00.000",
+    "ESTIMATED_DELIVERY_AT": "2026-03-28 18:00:00.000",
+    "DELIVERED_AT": null
+  }
+
+```
+
+- insert_order_items.json
+```
+{
+    "ORDER_ID": "f940e504-a80a-44bb-af9b-364387104824",
+    "PRODUCT_ID": "843b6553-dc6a-4fc4-bceb-02cd39af0168",
+    "QUANTITY": 5
+  },
+  {
+    "ORDER_ID": "f940e504-a80a-44bb-af9b-364387104824",
+    "PRODUCT_ID": "b86ae24b-6f59-47e8-8adc-b17d88cbd367",
+    "QUANTITY": 1
+  },
+  {
+    "ORDER_ID": "7de9b510-d33e-4ca2-b21d-c8904d9a1e0a",
+    "PRODUCT_ID": "e18f33a6-b89a-4fbc-82ad-ccba5bb261cc",
+    "QUANTITY": 5
+  },
+  {
+    "ORDER_ID": "7de9b510-d33e-4ca2-b21d-c8904d9a1e0a",
+    "PRODUCT_ID": "64d39754-03e4-4fa0-b1ea-5f4293315f67",
+    "QUANTITY": 4
+  },
+  {
+    "ORDER_ID": "f5d46b90-17fe-4878-a7a7-afc4a253448e",
+    "PRODUCT_ID": "64d39754-03e4-4fa0-b1ea-5f4293315f67",
+    "QUANTITY": 1
+  },
+  {
+    "ORDER_ID": "f5d46b90-17fe-4878-a7a7-afc4a253448e",
+    "PRODUCT_ID": "d3e228db-8ca5-42ad-bb0a-2148e876cc59",
+    "QUANTITY": 1
+  },
+  {
+    "ORDER_ID": "80eb23b9-f64e-423f-8a15-4a2ed0441adf",
+    "PRODUCT_ID": "b66a7143-c18a-43bb-b5dc-06bb5d1d3160",
+    "QUANTITY": 5
+  },
+  {
+    "ORDER_ID": "80eb23b9-f64e-423f-8a15-4a2ed0441adf",
+    "PRODUCT_ID": "4cda01b9-62e2-46c5-830f-b7f262a58fb1",
+    "QUANTITY": 3
+  },
+  {
+    "ORDER_ID": "11c397d5-58fc-46ee-8474-95b1742ce296",
+    "PRODUCT_ID": "b86ae24b-6f59-47e8-8adc-b17d88cbd367",
+    "QUANTITY": 1
+  },
+  {
+    "ORDER_ID": "11c397d5-58fc-46ee-8474-95b1742ce296",
+    "PRODUCT_ID": "d3e228db-8ca5-42ad-bb0a-2148e876cc59",
+    "QUANTITY": 2
+  },
+  {
+    "ORDER_ID": "e1457b54-6b8b-4924-b996-e2e2c91b0ce1",
+    "PRODUCT_ID": "843b6553-dc6a-4fc4-bceb-02cd39af0168",
+    "QUANTITY": 1
+  },
+  {
+    "ORDER_ID": "e1457b54-6b8b-4924-b996-e2e2c91b0ce1",
+    "PRODUCT_ID": "d3e228db-8ca5-42ad-bb0a-2148e876cc59",
+    "QUANTITY": 5
+  },
+  {
+    "ORDER_ID": "71bd20e8-adef-4f05-87c2-a3bf33615f15",
+    "PRODUCT_ID": "d3e228db-8ca5-42ad-bb0a-2148e876cc59",
+    "QUANTITY": 2
+  },
+  {
+    "ORDER_ID": "71bd20e8-adef-4f05-87c2-a3bf33615f15",
+    "PRODUCT_ID": "64d39754-03e4-4fa0-b1ea-5f4293315f67",
+    "QUANTITY": 1
+  },
+  {
+    "ORDER_ID": "547fc142-6480-4d53-b671-596f67347751",
+    "PRODUCT_ID": "64d39754-03e4-4fa0-b1ea-5f4293315f67",
+    "QUANTITY": 3
+  },
+  {
+    "ORDER_ID": "547fc142-6480-4d53-b671-596f67347751",
+    "PRODUCT_ID": "d3e228db-8ca5-42ad-bb0a-2148e876cc59",
+    "QUANTITY": 1
+  }
+```
+Estos archivos los tenemos disponibles en el Stage de CURSO_DATA_ENIGNEERING_2026_STAGE. 
+*Nota:* para cargarlos en el Stage, tendríamos que hacer un PUT del archivo en el stage, algo como *PUT file://insert_orders.json @CURSO_DATA_ENIGNEERING_2026_STAGE;*
+
+El objetivo es ingestar los datos que se dan en estos archivos en las tablas de CURSO_DATA_ENIGNEERING_2026.BRONZE.ORDERS y CURSO_DATA_ENIGNEERING_2026.BRONZE.ORDER_ITEMS. Por cierto, no seáis cafres y no copiéis a mano cada dato en la tabla, que nos conocemos. 
+
+(Si os sirve, podéis usar una función que hemos mencionado de LATERAL... algo, completad...)
 
  # Transformación (Funciones y Procedimientos)
 
