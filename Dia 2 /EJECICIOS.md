@@ -385,6 +385,11 @@ Os dejamos intentarlo y pasaremos la solución por mattermost si se complica.
 
 ## Paso 3: Procedures en capa silver
 
+Necesitamos crear una función para pasar el descuento de la tabla **PROMOS** al descuento en porcentaje (es decir, en vez de 20%, que sea 0.20). 
+[Aquí](https://docs.snowflake.com/en/sql-reference/sql/create-function#examples) tenéis una pistilla.
+
+**IMPORTANTE:** Usa esta función dentro del procedure que vas a crear a continuación. 
+
 Una vez tengamos todos los inserts listos vamos a meterlos en procedures para luego poder ejecutar la transformación de manera más sencilla, vamos a crear un procedure en el que llamaremos a todos los inserts, os dejo uno de ejemplo con un solo insert metido y solo tendréis que añadir los demás. Si os fijáis lo primero que se hace es truncar la tabla y luego insertar los datos. Esto lo hacemos para poder lanzarlo todas las veces que queramos sin que se nos acumulen datos repetidos, en la práctica normalmente las tablas serán históricas y cada día se insertaran días nuevos por lo que el truncate sobraría.
 ```
 CREATE OR REPLACE PROCEDURE INSERT_PROCEDURE()
