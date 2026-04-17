@@ -480,10 +480,10 @@ Supongamos que, cuando estabas ingestando datos, han llegado datos nuevos de otr
     "QUANTITY": 1
   }
 ```
-Estos archivos los tenemos disponibles en el Stage de CURSO_DATA_ENIGNEERING_2026_STAGE. 
-*Nota:* para cargarlos en el Stage, tendríamos que hacer un PUT del archivo en el stage, algo como *PUT file://insert_orders.json @CURSO_DATA_ENIGNEERING_2026_STAGE;*. No hace falta que lo hagáis para comprobarlo, pero para que te ahorres la pregunta al ChatGPT cuando os toque hacerlo.
+Estos archivos los tenemos disponibles en el Stage de JSON_STG en la base de datos CURSO_DATA_ENGINEERING_2026 (es decir, que si lo queréis usar, se referencia como CURSO_DATA_ENIGNEERING_2026.JSON_STG). 
+*Nota:* para cargarlos en el Stage, tendríamos que hacer un PUT del archivo en el stage desde Snowsight o similares, algo como *PUT file://insert_orders.json @CURSO_DATA_ENIGNEERING_2026.JSON_STG;*. No hace falta que lo hagáis para comprobarlo, pero para que te ahorres la pregunta al ChatGPT cuando os toque hacerlo.
 
-El objetivo es ingestar los datos que se dan en estos archivos en las tablas de CURSO_DATA_ENIGNEERING_2026.BRONZE.ORDERS y CURSO_DATA_ENIGNEERING_2026.BRONZE.ORDER_ITEMS. Por cierto, no seáis cafres y no copiéis a mano cada dato en la tabla, que nos conocemos. 
+El objetivo es ingestar los datos que se dan en estos archivos en las tablas de BRONZE.ORDERS y BRONZE.ORDER_ITEMS. Por cierto, no seáis cafres y no copiéis a mano cada dato en la tabla, que nos conocemos. 
 
 (Si os sirve, podéis usar una función que hemos mencionado de LATERAL... algo, completad anda, que este archivo es muy largo...)
 
