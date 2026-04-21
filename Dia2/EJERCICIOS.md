@@ -1,0 +1,497 @@
+
+
+ # Transformación (Funciones y Procedimientos)
+Bienvenidos al mundo de las transformaciones en Snowflake. Si los profesores acabaron así como los véis, veremos como acabáis vosotros.
+
+ ## Paso 1: Hacer Cloning
+ El primer paso es hacer un cloning de BRONZE. Veeeeeeeenga, a recordar lo que habéis aprendido. Para asegurarnos de que todos partimos de la misma situación vamos a clonar el esquema BRONZE de CURSO_DATA_ENGINEERING_2025 a nuestra propia base de datos, reescribiendo nuestro esquema BRONZE para que haya menos lío. Hemos visto el cloning en teoría y la sintaxis es muy sencilla. Aqui está la documentación de crear un objeto como clon de otro, https://docs.snowflake.com/en/sql-reference/sql/create-clone. Ya sabeís que en la documentación la sintaxis viene con muchas pamplinas al final el comando que solemos lanzar es mucho más corto y sencillo.
+
+Pista : Siempre que tengáis un objeto ya creado y lo querais recrear sobreescribiendo el antiguo podéis usar la claúsula OR REPLACE en el comando CREATE.
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+ ## Paso 2: Capa Silver
+ 
+Ahora mismo todos tenemos en nuestro BRONZE nuestras tablas con el dato RAW, osea sin tratar. El siguiente paso será pasar al schema SILVER y aprovecharemos este paso para hacer algunos cambios y añadir algún campo que enriquezca nuestros datos.
+
+En primer lugar tenemos que crear el esquema SILVER y las tablas de SILVER, os dejo aqui los CREATES que vamos a usar (cambiad base de datos y esquema al vuestro).
+
+```
+
+-- SILVER
+
+--  ORDERS
+CREATE OR REPLACE TABLE MY_DB.MY_SILVER_SCHEMA.ORDERS (
+    ORDER_ID VARCHAR(50),
+    SHIPPING_SERVICE VARCHAR(20),
+    SHIPPING_COST FLOAT,
+    ADDRESS_ID VARCHAR(50),
+    CREATED_AT TIMESTAMP_NTZ,
+    Promo_Name VARCHAR(50),
+    ESTIMATED_DELIVERY_AT TIMESTAMP_NTZ,
+    ORDER_COST FLOAT,
+    USER_ID VARCHAR(50),
+    ORDER_TOTAL FLOAT,
+    DELIVERED_AT TIMESTAMP_NTZ,
+    TRACKING_ID VARCHAR(50),
+    STATUS VARCHAR(20),
+    Delivery_time_hours INT
+);
+
+-- EVENTS
+CREATE OR REPLACE TABLE MY_DB.MY_SILVER_SCHEMA.EVENTS (
+    EVENT_ID VARCHAR(50),
+    PAGE_URL VARCHAR(200),
+    EVENT_TYPE VARCHAR(50),
+    USER_ID VARCHAR(50),
+    PRODUCT_ID VARCHAR(50),
+    SESSION_ID VARCHAR(50),
+    CREATED_AT TIMESTAMP_NTZ,
+    ORDER_ID VARCHAR(50),
+    Hit_number INT
+);
+
+-- PRODUCTS
+CREATE OR REPLACE TABLE MY_DB.MY_SILVER_SCHEMA.PRODUCTS (
+    PRODUCT_ID VARCHAR(50),
+    PRICE FLOAT,
+    NAME VARCHAR(100),
+    INVENTORY NUMBER(38,0)
+);
+
+-- ADDRESSES
+CREATE OR REPLACE TABLE MY_DB.MY_SILVER_SCHEMA.ADDRESSES (
+    ADDRESS_ID VARCHAR(50),
+    ZIPCODE NUMBER(38,0),
+    COUNTRY VARCHAR(50),
+    ADDRESS VARCHAR(150),
+    STATE VARCHAR(50)
+);
+
+-- USERS
+CREATE OR REPLACE TABLE MY_DB.MY_SILVER_SCHEMA.USERS (
+    USER_ID VARCHAR(50),
+    UPDATED_AT TIMESTAMP_NTZ,
+    ADDRESS_ID VARCHAR(50),
+    LAST_NAME VARCHAR(50),
+    CREATED_AT TIMESTAMP_NTZ,
+    PHONE_NUMBER VARCHAR(20),
+    FIRST_NAME VARCHAR(50),
+    EMAIL VARCHAR(100)
+);
+
+-- ORDER_ITEMS
+CREATE OR REPLACE TABLE MY_DB.MY_SILVER_SCHEMA.ORDER_ITEMS (
+    ORDER_ID VARCHAR(50),
+    PRODUCT_ID VARCHAR(50),
+    QUANTITY NUMBER(38,0)
+);
+
+-- PROMOS
+CREATE OR REPLACE TABLE MY_DB.MY_SILVER_SCHEMA.PROMOS (
+    PROMO_ID VARCHAR(50),
+    DISCOUNT FLOAT,
+    STATUS VARCHAR(50)
+);
+```
+
+Tenemos que ejecutar todos esos creates, una vez hecho vamos a echarle un ojo más de cerca a las diferencias entre estás tablas y las de BRONZE. 
+
+En primer lugar podemos ver que ya no todos los tipos de dato son VARCHAR(256), ahora tenemos los tipos de datos ajustados al dato que nos viene, además hemos añadido algunos campos, HIT_NUMBER en EVENTS y DELIVERY_TIME_HOURS en ORDERS. Para rellenar estas tablas tendremos que tener en cuenta estas diferencias.
+
+El primer paso es preparar un comando INSERT INTO que cargará el dato desde BRONZE a SILVER, para las tablas de **PRODUCTS y ADRESSES** aplicando las transformaciones necesarias, os dejo aqui algunos ejemplos para que veáis que no tienen mucha ciencia.
+
+Además, podéis ver que en este caso la única transformación que tenemos que hacer es cambiar el tipo de dato (CASTEOS), snowflake tiene una manera sencilla de aplicarlos que es con ::tipo_de_dato, esto habrá que hacerlo para todas las tablas. Os recomendamos empezar por las que no son EVENTS ni ORDERS ya que para estas habrá que añadir un campo calculado que tiene un poco más de dificultad.
+
+```
+-- USERS
+INSERT INTO MY_DB.MY_SILVER_SCHEMA.USERS 
+SELECT 
+    USER_ID::varchar(50),
+    UPDATED_AT::timestamp_ntz,
+    ADDRESS_ID::varchar(50),
+    LAST_NAME::varchar(50),
+    CREATED_AT::timestamp_ntz,
+    PHONE_NUMBER::varchar(20),
+    FIRST_NAME::varchar(50),
+    EMAIL::varchar(100)
+FROM bronze.users;
+
+-- ORDER_ITEMS
+INSERT INTO MY_DB.MY_SILVER_SCHEMA.ORDER_ITEMS 
+SELECT 
+    ORDER_ID::varchar(50),
+    PRODUCT_ID::varchar(50),
+    QUANTITY::number(38,0)
+FROM bronze.order_items;
+
+-- PROMOS
+INSERT INTO MY_DB.MY_SILVER_SCHEMA.PROMOS 
+SELECT 
+    PROMO_ID::varchar(50),
+    DISCOUNT::float,
+    STATUS::varchar(50)
+FROM my_db.my_bronze_schema.promos;
+```
+
+Una vez hechos los INSERT INTO para las tablas sencillas podéis ejecutarlos y comprobar que efectivamente se rellenan las tablas de SILVER.
+
+
+**Tablas "complicadas":**
+
+Vamos a por ORDERS, el nuevo campo se llama DELIVERY_TIME_HOURS y os dicen desde negocio que este campo es la diferencia en horas desde que se crea un pedido hasta que se entrega. Tendreís que buscar una función de Snowflake que consiga hacer esto, tenéis el timestamp de creación en CREATED_AT y el de entrega en DELIVERED_AT.
+
+Con EVENTS ocurre lo siguiente, a un data science flipado se le ha ocurrido la brillante idea de hacer un análisis de las sesiones en la web y nos ha pedido que le añadamos un campo que numere los distintos eventos dentro de una sesión. Osea que si dentro de una sesión lo primero que hace un usuario es visitar un producto, que ese registro lleve HIT_NUMBER = 1 , luego visita otro HIT_NUMBER = 2, luego va al carrito y revisa HIT_NUMBER = 3 y luego compra HIT_NUMBER = 4.
+Esto se hace con una window function. Queremos que para todos los registros que tienen el mismo SESSION_ID se base en el timestamp CREATED_AT para añardir un campo HIT_NUMBER ordenado. 
+
+Funciona con varias window functions pero yo por ejemplo he usado row_number, la cual podéis encontrar en la documentación de Snowflake.
+
+Os dejamos intentarlo y pasaremos la solución por mattermost si se complica.
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+## Paso 3: Procedures en capa silver
+
+Necesitamos crear una función para pasar el descuento de la tabla **PROMOS** al descuento en porcentaje (es decir, en vez de 20%, que sea 0.20). 
+[Aquí](https://docs.snowflake.com/en/sql-reference/sql/create-function#examples) tenéis una pistilla.
+
+**IMPORTANTE:** Usa esta función dentro del procedure que vas a crear a continuación. 
+
+Una vez tengamos todos los inserts listos vamos a meterlos en procedures para luego poder ejecutar la transformación de manera más sencilla, vamos a crear un procedure en el que llamaremos a todos los inserts, os dejo uno de ejemplo con un solo insert metido y solo tendréis que añadir los demás. Si os fijáis lo primero que se hace es truncar la tabla y luego insertar los datos. Esto lo hacemos para poder lanzarlo todas las veces que queramos sin que se nos acumulen datos repetidos, en la práctica normalmente las tablas serán históricas y cada día se insertaran días nuevos por lo que el truncate sobraría.
+```
+CREATE OR REPLACE PROCEDURE INSERT_PROCEDURE()
+    RETURNS VARCHAR
+    LANGUAGE SQL
+    EXECUTE AS CALLER
+AS
+BEGIN
+    -- Truncado de la tabla
+    TRUNCATE TABLE MY_DB.MY_SILVER_SCHEMA.PROMOS;
+
+    -- Insert de la tabla
+    INSERT INTO MY_DB.MY_SILVER_SCHEMA.USERS 
+    SELECT 
+        USER_ID::varchar(50),
+        UPDATED_AT::timestamp_ntz,
+        ADDRESS_ID::varchar(50),
+        LAST_NAME::varchar(50),
+        CREATED_AT::timestamp_ntz,
+        PHONE_NUMBER::varchar(20),
+        FIRST_NAME::varchar(50),
+        EMAIL::varchar(100)
+    FROM bronze.users;
+
+    INSERT INTO MY_DB.MY_SILVER_SCHEMA.ORDER_ITEMS 
+    SELECT 
+        ORDER_ID::varchar(50),
+        PRODUCT_ID::varchar(50),
+        QUANTITY::number(38,0)
+    FROM bronze.order_items;
+
+    INSERT INTO MY_DB.MY_SILVER_SCHEMA.PROMOS 
+    SELECT 
+        PROMO_ID::varchar(50),
+        DISCOUNT::float,
+        STATUS::varchar(50)
+    FROM my_db.my_bronze_schema.promos;
+    -- Añadir aqui resto de tablas
+    -- ...
+    -- Devolvemos un mensaje diciendo que ha ido todo bien
+    RETURN 'Insertado con éxito máquina';
+END;
+```
+
+## Paso 4: Capa Gold
+
+Ya tenemos nuestra SILVER que da gusto verla, nuestros campos están con los formatos adecuados y hemos añadido un par de campos que aportan una información muy interesante. Ahora vamos a movernos a GOLD, en esta capa vamos a montar dos casos de uso. Estos casos de uso son dos ejemplos sencillos de como podríamos agregar los datos que nos dan para obtener información relevante para el negocio.
+
+### Caso de uso 1: SESSION DETAILS
+
+Queremos saber más sobre las sesiones web y vamos a crear una tabla agrupada por sesión que nos de información valiosa a la que puedan mirar los usuarios de negocio y entender mejor como actuan nuestros clientes en la web. Os dejo primero el CREATE de la tabla, recordad cambiar base de datos y esquema a los vuestros y crear el esquema GOLD si es que aún no lo habéis hecho.
+```
+-- SESSION DETAILS
+CREATE OR REPLACE TABLE MY_DB.MY_GOLD_SCHEMA.session_details (
+    session_id VARCHAR(50),
+    Finish_with_Order BOOLEAN,
+    Num_Eventos INT,
+    Session_duration_minutes INT
+);
+```
+Para rellenar esta tabla tendremos que construir un INSERT INTO, pero podemos centrarnos en la select y luego simplemente meterla en un INSERT INTO.
+
+Algunos detalles y explicaciones:
+
+Agruparemos por sesión por lo que cada registro corresponderá a una sesión y tendrá su session_id correspondiente (viene de tabla EVENTS), además queremos tener un indicador de si la sesión acabó en compra, la pista que os doy aqui es que en la tabla events si una sesión termina en compra uno de los registros asociado a esa sesión llevará un order_id no nulo. El tercer campo es el número de eventos que han tenido lugar en esa sessión, hemos calculado un campo en SILVER que puede simplificar este cálculo mucho. Para finalizar queremos saber la duración de una sesión en minutos, os diré que para esto se usa el campo CREATED_AT de la tabla EVENTS y una función que ya usamos en silver para calcular la diferencia en horas desde que se creaba un pedido hasta que era entregado.
+
+PD: Sólo necesitamos la tabla EVENTS para calcular todo esto, entendemos que son cosas cada vez más complejas, no hay problema si no las sacáis, preguntad todo y al final de la clase se compartirán todas las soluciones. Lo importante es que entendáis los casos de uso y que sepáis explicar lo que se quiere conseguir.
+
+
+### Caso de uso 2: STATE ANALISIS
+
+Vamos a hacer una agrupación por estado (los datos son de Estados Unidos) 
+Os dejamos el create por aquí, recordad cambiar base de datos y esquema.
+```
+-- STATE ANALYSIS
+CREATE OR REPLACE TABLE MY_DB.MY_GOLD_SCHEMA.GENERAL_STATE_ANALYSIS (
+    state VARCHAR(50),
+    TOTAL_ORDER_COSTS FLOAT,
+    NUMBER_OF_ORDERS INT,
+    NUMBER_OF_USERS INT,
+    SHIPPING_COST_PERCENTAGE FLOAT,
+    Main_shipping_service VARCHAR(50)
+);
+```
+Igual que antes  podemos centrarnos en la select y luego simplemente meterla en un INSERT INTO.
+Como véis necesitamos datos de varias tablas y aplicar ciertos cálculos a algunos de ellos. Entiendo que esto puede ser complejo por favor preguntad todas las dudas y no os preocupéis si no conseguís terminarlo, nos hemos pasado y el ejercicio es demasiado largo.
+
+Algunos detalles y pistas:
+
+Vamos a tener que construir una select con un join para poder coger datos de dos tablas y agruparlos por estado. 
+Las tablas que necesitamos son ORDERS y ADDRESSES, con ellas vamos a poder obtener todo lo que se nos pide, sabemos que estás tablas se unen por el campo ADDRESS_ID que las dos contienen.
+
+En TOTAL_ORDER_COSTS se esperan encontrar los gastos totales de todos los pedidos que se han hecho en un estado.
+NUMBER_OF_ORDERS cuenta el numero de pedidos que ha habido en un estado y NUMBER_OF_USERS el numero de usuarios distintos que han pedido algo en un estado.
+SHIPPING_COST_PERCENTAGE es un ratio que nos indica cuanto ha supuesto los gastos de envío en relación con es coste total de los pedidos para cada estado.
+Finalmente MAIN_SHIPPING_SERVICE corresponde a el servicio de paquetería más usado en cada estado.
+
+
+### Paso 5: Procedure en capa gold
+
+Felicidades ya has terminado realmente, tu INSERT INTO en gold va fino y funciona de lujo y ya solo tienes que crear un procedure con la misma forma que el de silver que contenga el insert into para cada caso de uso. Puedes copiar y pegar el de SILVER y sustituir las queries que tira por el insert into de GOLD correspondiente. Con esto la transformación está completamente desarrollada y preparada para lanzarse cómodamente. Te has ganado una cerveza compañer@.
+
+PD: Espero que alguien llegue a este punto, si lo haces te debo una cerveza
+
+
+# Datos semiestructurados
+
+
+  ## Paso 1: Ingesta
+
+Como ya entendemos los datos semi-estructurados, vamos a ver su uso en Snowflake con un ejercicio práctico. A por elloo!
+
+Supongamos que, cuando estabas ingestando datos, han llegado datos nuevos de otra fuente de datos en formato JSON, y se deben de ingestar estos datos también. El problema es que no vienen en un formato tabular como hasta ahora. Se nos presentan dos archivos JSON: 
+
+- insert_orders.json:
+
+```
+  {
+    "ORDER_ID": "f940e504-a80a-44bb-af9b-364387104824",
+    "USER_ID": "02414bff-285d-4008-9352-ad50839b729f",
+    "ADDRESS_ID": "1c6e9a5c-3fa8-4ac5-a4fe-5159a187c293",
+    "STATUS": "preparing",
+    "SHIPPING_SERVICE": "dhl",
+    "SHIPPING_COST": 12.59,
+    "ORDER_COST": 58.75,
+    "ORDER_TOTAL": 71.34,
+    "PROMO_ID": null,
+    "TRACKING_ID": "0291a09c-8a91-46ae-8d46-a3cbcf106bf6",
+    "CREATED_AT": "2026-03-24 10:47:00.000",
+    "ESTIMATED_DELIVERY_AT": "2026-03-27 12:00:00.000",
+    "DELIVERED_AT": null
+  },
+  {
+    "ORDER_ID": "7de9b510-d33e-4ca2-b21d-c8904d9a1e0a",
+    "USER_ID": "0babae9e-2656-4dcb-b454-47d88d47c920",
+    "ADDRESS_ID": "e6572a36-e4ae-4daa-8c05-692490c310a1",
+    "STATUS": "shipped",
+    "SHIPPING_SERVICE": "dhl",
+    "SHIPPING_COST": 11.86,
+    "ORDER_COST": 61.12,
+    "ORDER_TOTAL": 72.98,
+    "PROMO_ID": null,
+    "TRACKING_ID": "0e780cf1-1732-4f40-916a-c2a29e73fc26",
+    "CREATED_AT": "2026-03-21 16:38:00.000",
+    "ESTIMATED_DELIVERY_AT": "2026-03-24 12:00:00.000",
+    "DELIVERED_AT": "2026-03-25 14:00:00.000"
+  },
+  {
+    "ORDER_ID": "f5d46b90-17fe-4878-a7a7-afc4a253448e",
+    "USER_ID": "2d90a679-c85d-4299-86dd-2319424fcc15",
+    "ADDRESS_ID": "89ab3752-1119-4f9e-9766-0d6883501434",
+    "STATUS": "shipped",
+    "SHIPPING_SERVICE": "usps",
+    "SHIPPING_COST": 6.31,
+    "ORDER_COST": 256.24,
+    "ORDER_TOTAL": 262.55,
+    "PROMO_ID": "Mandatory",
+    "TRACKING_ID": "7c3e2ae7-da67-415c-bfd8-d18f300ea2a9",
+    "CREATED_AT": "2026-03-20 13:17:00.000",
+    "ESTIMATED_DELIVERY_AT": "2026-03-23 12:00:00.000",
+    "DELIVERED_AT": "2026-03-24 14:00:00.000"
+  },
+  {
+    "ORDER_ID": "80eb23b9-f64e-423f-8a15-4a2ed0441adf",
+    "USER_ID": "4115e7da-5892-4eef-9f39-705626158c7f",
+    "ADDRESS_ID": "71aa45c1-ce05-43b5-a52a-6145ab435c69",
+    "STATUS": "preparing",
+    "SHIPPING_SERVICE": "ups",
+    "SHIPPING_COST": 8.7,
+    "ORDER_COST": 175.64,
+    "ORDER_TOTAL": 184.34,
+    "PROMO_ID": "task-force",
+    "TRACKING_ID": "77472966-6aca-4d4e-a5e9-50c863149fbb",
+    "CREATED_AT": "2026-03-25 19:29:00.000",
+    "ESTIMATED_DELIVERY_AT": "2026-03-29 12:00:00.000",
+    "DELIVERED_AT": null
+  },
+  {
+    "ORDER_ID": "11c397d5-58fc-46ee-8474-95b1742ce296",
+    "USER_ID": "520baa4f-ee70-420b-96c9-37e3c4238f43",
+    "ADDRESS_ID": "4d9d28c3-6e38-48e7-9960-f244a3e72d9d",
+    "STATUS": "shipped",
+    "SHIPPING_SERVICE": "ups",
+    "SHIPPING_COST": 15.44,
+    "ORDER_COST": 266.48,
+    "ORDER_TOTAL": 281.92,
+    "PROMO_ID": "Optional",
+    "TRACKING_ID": "7addbad8-c3c9-4097-96b2-505dd3bc7389",
+    "CREATED_AT": "2026-03-25 08:42:00.000",
+    "ESTIMATED_DELIVERY_AT": "2026-03-28 12:00:00.000",
+    "DELIVERED_AT": "2026-03-29 14:00:00.000"
+  },
+  {
+    "ORDER_ID": "e1457b54-6b8b-4924-b996-e2e2c91b0ce1",
+    "USER_ID": "48ebf150-7cb7-4358-a5ef-1a2b0aa831b9",
+    "ADDRESS_ID": "db3e2e70-32f5-4f13-8302-63127ca0e3a8",
+    "STATUS": "preparing",
+    "SHIPPING_SERVICE": "dhl",
+    "SHIPPING_COST": 16.0,
+    "ORDER_COST": 183.04,
+    "ORDER_TOTAL": 199.04,
+    "PROMO_ID": null,
+    "TRACKING_ID": "f11e732c-c637-40f1-9c5c-0f214480cd3c",
+    "CREATED_AT": "2026-03-27 13:22:00.000",
+    "ESTIMATED_DELIVERY_AT": "2026-03-31 12:00:00.000",
+    "DELIVERED_AT": null
+  },
+  {
+    "ORDER_ID": "71bd20e8-adef-4f05-87c2-a3bf33615f15",
+    "USER_ID": "d1f08820-32e6-4a31-abba-5aa533bc15a9",
+    "ADDRESS_ID": "02331e89-1736-4f12-85b9-ddd62545214b",
+    "STATUS": "preparing",
+    "SHIPPING_SERVICE": "ups",
+    "SHIPPING_COST": 7.5,
+    "ORDER_COST": 125.0,
+    "ORDER_TOTAL": 132.5,
+    "PROMO_ID": null,
+    "TRACKING_ID": "fab7e760-3b55-4b8e-8d4e-bfddc5461fb3",
+    "CREATED_AT": "2026-03-27 10:00:00.000",
+    "ESTIMATED_DELIVERY_AT": "2026-03-30 12:00:00.000",
+    "DELIVERED_AT": null
+  },
+  {
+    "ORDER_ID": "547fc142-6480-4d53-b671-596f67347751",
+    "USER_ID": "d1f08820-32e6-4a31-abba-5aa533bc15a9",
+    "ADDRESS_ID": "02331e89-1736-4f12-85b9-ddd62545214b",
+    "STATUS": "shipped",
+    "SHIPPING_SERVICE": "fedex",
+    "SHIPPING_COST": 12.0,
+    "ORDER_COST": 210.75,
+    "ORDER_TOTAL": 222.75,
+    "PROMO_ID": "Mandatory",
+    "TRACKING_ID": "b805b81a-a25f-4887-becc-ce11b11f50ca",
+    "CREATED_AT": "2026-03-25 08:30:00.000",
+    "ESTIMATED_DELIVERY_AT": "2026-03-28 18:00:00.000",
+    "DELIVERED_AT": null
+  }
+
+```
+
+- insert_order_items.json
+```
+{
+    "ORDER_ID": "f940e504-a80a-44bb-af9b-364387104824",
+    "PRODUCT_ID": "843b6553-dc6a-4fc4-bceb-02cd39af0168",
+    "QUANTITY": 5
+  },
+  {
+    "ORDER_ID": "f940e504-a80a-44bb-af9b-364387104824",
+    "PRODUCT_ID": "b86ae24b-6f59-47e8-8adc-b17d88cbd367",
+    "QUANTITY": 1
+  },
+  {
+    "ORDER_ID": "7de9b510-d33e-4ca2-b21d-c8904d9a1e0a",
+    "PRODUCT_ID": "e18f33a6-b89a-4fbc-82ad-ccba5bb261cc",
+    "QUANTITY": 5
+  },
+  {
+    "ORDER_ID": "7de9b510-d33e-4ca2-b21d-c8904d9a1e0a",
+    "PRODUCT_ID": "64d39754-03e4-4fa0-b1ea-5f4293315f67",
+    "QUANTITY": 4
+  },
+  {
+    "ORDER_ID": "f5d46b90-17fe-4878-a7a7-afc4a253448e",
+    "PRODUCT_ID": "64d39754-03e4-4fa0-b1ea-5f4293315f67",
+    "QUANTITY": 1
+  },
+  {
+    "ORDER_ID": "f5d46b90-17fe-4878-a7a7-afc4a253448e",
+    "PRODUCT_ID": "d3e228db-8ca5-42ad-bb0a-2148e876cc59",
+    "QUANTITY": 1
+  },
+  {
+    "ORDER_ID": "80eb23b9-f64e-423f-8a15-4a2ed0441adf",
+    "PRODUCT_ID": "b66a7143-c18a-43bb-b5dc-06bb5d1d3160",
+    "QUANTITY": 5
+  },
+  {
+    "ORDER_ID": "80eb23b9-f64e-423f-8a15-4a2ed0441adf",
+    "PRODUCT_ID": "4cda01b9-62e2-46c5-830f-b7f262a58fb1",
+    "QUANTITY": 3
+  },
+  {
+    "ORDER_ID": "11c397d5-58fc-46ee-8474-95b1742ce296",
+    "PRODUCT_ID": "b86ae24b-6f59-47e8-8adc-b17d88cbd367",
+    "QUANTITY": 1
+  },
+  {
+    "ORDER_ID": "11c397d5-58fc-46ee-8474-95b1742ce296",
+    "PRODUCT_ID": "d3e228db-8ca5-42ad-bb0a-2148e876cc59",
+    "QUANTITY": 2
+  },
+  {
+    "ORDER_ID": "e1457b54-6b8b-4924-b996-e2e2c91b0ce1",
+    "PRODUCT_ID": "843b6553-dc6a-4fc4-bceb-02cd39af0168",
+    "QUANTITY": 1
+  },
+  {
+    "ORDER_ID": "e1457b54-6b8b-4924-b996-e2e2c91b0ce1",
+    "PRODUCT_ID": "d3e228db-8ca5-42ad-bb0a-2148e876cc59",
+    "QUANTITY": 5
+  },
+  {
+    "ORDER_ID": "71bd20e8-adef-4f05-87c2-a3bf33615f15",
+    "PRODUCT_ID": "d3e228db-8ca5-42ad-bb0a-2148e876cc59",
+    "QUANTITY": 2
+  },
+  {
+    "ORDER_ID": "71bd20e8-adef-4f05-87c2-a3bf33615f15",
+    "PRODUCT_ID": "64d39754-03e4-4fa0-b1ea-5f4293315f67",
+    "QUANTITY": 1
+  },
+  {
+    "ORDER_ID": "547fc142-6480-4d53-b671-596f67347751",
+    "PRODUCT_ID": "64d39754-03e4-4fa0-b1ea-5f4293315f67",
+    "QUANTITY": 3
+  },
+  {
+    "ORDER_ID": "547fc142-6480-4d53-b671-596f67347751",
+    "PRODUCT_ID": "d3e228db-8ca5-42ad-bb0a-2148e876cc59",
+    "QUANTITY": 1
+  }
+```
+Estos archivos los tenemos disponibles en el Stage de JSON_STG en la base de datos CURSO_DATA_ENGINEERING_2026 (es decir, que si lo queréis usar, se referencia como CURSO_DATA_ENIGNEERING_2026.JSON_STG). 
+*Nota:* para cargarlos en el Stage, tendríamos que hacer un PUT del archivo en el stage desde Snowsight o similares, algo como *PUT file://insert_orders.json @CURSO_DATA_ENIGNEERING_2026.JSON_STG;*. No hace falta que lo hagáis para comprobarlo, pero para que te ahorres la pregunta al ChatGPT cuando os toque hacerlo.
+
+El objetivo es ingestar los datos que se dan en estos archivos en las tablas de BRONZE.ORDERS y BRONZE.ORDER_ITEMS. Por cierto, no seáis cafres y no copiéis a mano cada dato en la tabla, que nos conocemos. 
+
+(Si os sirve, podéis usar una función que hemos mencionado de LATERAL... algo, completad anda, que este archivo es muy largo...)
+
+ VAYAAAAAAAAA! Al final los profesores han decidido que ese nuevo dato ingestado no nos aporta nada porque Rafa se ha equivocado. Necesitamos volver a tener la misma versión inicial antes de trabajar con datos semiestructurados.
+
+ -------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+ Para asegurarnos que vamos a tener todos el mismo dato os dejo por aqui la solución rápida a ejecutar: CREATE OR REPLACE SCHEMA MY_DB.MY_BRONZE_SCHEMA CLONE CURSO_DATA_ENGINEERING_2026.BRONZE 
+
+ JEJEJEJE OS HE COLADO LA SOLUCIÓN DESPUES 😉
+Aunque te de coraje HAZLO QUE TIENES QUE TENERLO BIEN PARA EL PRÓXIMO DÍA
